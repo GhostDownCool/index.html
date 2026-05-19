@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Lista de Alunos</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f4f6f8;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      background: #ffffff;
+      padding: 28px;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    h1 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      text-align: center;
+      color: #222;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 24px;
+    }
+
+    .form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px 14px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      outline: none;
+    }
+
+    input:focus {
+      border-color: #2563eb;
+    }
+
+    button {
+      padding: 12px 18px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    button:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+
+    .status {
+      min-height: 22px;
+      margin-bottom: 16px;
+      text-align: center;
+      color: #444;
+      font-size: 14px;
+    }
+
+    .lista {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid #ddd;
+    }
+
+    .lista li {
+      padding: 14px 16px;
+      font-size: 16px;
+    }
+
+    .lista li:nth-child(odd) {
+      background: #ffffff;
+    }
+
+    .lista li:nth-child(even) {
+      background: #eef3ff;
+    }
+
+    .vazio {
+      text-align: center;
+      color: #777;
+      padding: 18px;
+      border: 1px dashed #ccc;
+      border-radius: 12px;
+    }
+
+    @media (max-width: 480px) {
+      .form {
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container">
+    <h1>Lista de Alunos</h1>
+    <p class="subtitle">Digite um nome para salvar na planilha.</p>
+
+    <form class="form" id="formAluno">
+      <input 
+        type="text" 
+        id="nomeAluno" 
+        placeholder="Nome do aluno" 
+        autocomplete="off"
+        required
+      />
+
+      <button type="submit" id="btnSalvar">
+        Salvar
+      </button>
+    </form>
+
+    <div class="status" id="status"></div>
+
+    <ul class="lista" id="listaAlunos"></ul>
+  </main>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbzLq3uI69N0yxt9TRGSOLz23AdM8lLuzAspmnFzuTxS5H5V1ZaCybV9UV5FMdt1VXQ0Xw/exec";
+
+    const form = document.getElementById("formAluno");
+    const inputNome = document.getElementById("nomeAluno");
+    const listaAlunos = document.getElementById("listaAlunos");
+    const statusBox = document.getElementById("status");
+    const btnSalvar = document.getElementById("btnSalvar");
+
+    function chamarApiJSONP(params) {
+      return new Promise((resolve, reject) => {
+        const callbackName = "jsonpCallback_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+
+        params.callback = callbackName;
+
+        const queryString = new URLSearchParams(params).toString();
+        const script = document.createElement("script");
+
+        window[callbackName] = function(response) {
+          resolve(response);
+
+          delete window[callbackName];
+          script.remove();
+        };
+
+        script.onerror = function() {
+          reject(new Error("Erro ao conectar com o Google Apps Script."));
+
+          delete window[callbackName];
+          script.remove();
+        };
+
+        script.src = API_URL + "?" + queryString;
+
+        document.body.appendChild(script);
+      });
+    }
+
+    function normalizarLista(alunos) {
+      return alunos.sort((a, b) => {
+        return a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+      });
+    }
+
+    function renderizarLista(alunos) {
+      listaAlunos.innerHTML = "";
+
+      if (!alunos || alunos.length === 0) {
+        listaAlunos.innerHTML = `
+          <li class="vazio">Nenhum aluno cadastrado ainda.</li>
+        `;
+        return;
+      }
+
+      const alunosOrdenados = normalizarLista(alunos);
+
+      alunosOrdenados.forEach((nome, index) => {
+        const li = document.createElement("li");
+        li.textContent = `${index + 1}. ${nome}`;
+        listaAlunos.appendChild(li);
+      });
+    }
+
+    async function carregarAlunos() {
+      statusBox.textContent = "Carregando lista...";
+
+      try {
+        const response = await chamarApiJSONP({
+          action: "list"
+        });
+
+        if (!response.success) {
+          throw new Error(response.message);
+        }
+
+        renderizarLista(response.alunos);
+        statusBox.textContent = "";
+      } catch (error) {
+        statusBox.textContent = error.message;
+      }
+    }
+
+    async function salvarAluno(nome) {
+      btnSalvar.disabled = true;
+      statusBox.textContent = "Salvando aluno...";
+
+      try {
+        const response = await chamarApiJSONP({
+          action: "add",
+          nome: nome
+        });
+
+        if (!response.success) {
+          throw new Error(response.message);
+        }
+
+        inputNome.value = "";
+        inputNome.focus();
+
+        renderizarLista(response.alunos);
+        statusBox.textContent = "Aluno salvo com sucesso!";
+      } catch (error) {
+        statusBox.textContent = error.message;
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    }
+
+    form.addEventListener("submit", function(event) {
+      event.preventDefault();
+
+      const nome = inputNome.value.trim();
+
+      if (!nome) {
+        statusBox.textContent = "Digite um nome válido.";
+        return;
+      }
+
+      salvarAluno(nome);
+    });
+
+    carregarAlunos();
+  </script>
+
+</body>
+</html>
